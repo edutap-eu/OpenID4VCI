@@ -1,0 +1,134 @@
+[project]
+name = "openid4vci"
+version = "1.0.0a1.dev0"
+description = "Library for OpenID for Verifiable Credential Issuance 1.0"
+keywords = ["OpenID4VCI", "OpenID", "Verifiable Credentials", "VCI", "DID", "eduTAP"]
+readme = "README.md"
+authors = [
+    {name = "Alexander Loechel", email = "Alexander.Loechel@lmu.de"},
+]
+requires-python = ">=3.10"
+license = { text = "EUPL 1.2" }
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pydantic[email]>=2.0",
+    "pydantic_extra_types",
+    "pydantic-settings",
+    "phonenumbers",
+    "pycountry",
+  ]
+
+[project.urls]
+Source = "https://github.com/edutap-eu/OpenID4VCI"
+Issues = "https://github.com/edutap-eu/OpenID4VCI/issues"
+Documentation = "https://docs.edutap.eu/packages/openid4vci/index.html"
+
+[project.optional-dependencies]
+fastapi = [
+    "fastapi>=0.95",
+    "uvicorn[standard]",
+]
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest_httpx",
+    "pytest-order",
+    "faker",
+]
+typecheck  = [
+    "mypy",
+    "pytest-stub",
+]
+develop = [
+    "pdbpp",
+    "ipython",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openid4vci"]
+
+[tool.mypy]
+mypy_path = "./src:./tests"
+explicit_package_bases = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = [
+    "tests",
+]
+asyncio_mode = "auto"
+markers = [
+    "asyncio: mark test as asyncio-based",
+]
+
+# falls du pytest-dotenv verwendest
+# dotenv_files = [".env"]
+
+[tool.black]
+line-length = 160
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # The following are specific to Black, you probably don't want those.
+  | blib2to3
+  | tests/data
+  | profiling
+)/
+'''
+# We use preview style for formatting Black itself. If you
+# want stable formatting across releases, you should keep
+# this off.
+preview = true
+
+# Build system information and other project-specific configuration below.
+# NOTE: You don't need this in your own Black configuration.
+
+[tool.isort]
+profile = "black"
+force_alphabetical_sort = true
+force_single_line = true
+lines_after_imports = 2
+
+[tool.flake8]
+ignore = [
+    "C101",
+]
+per-file-ignores = [
+    '__init__.py:F401',
+]
+max-line-length = 110
+count = true
+
+
+[tool.codespell]
+ignore-words-list = "discreet,"
+skip = "*.json,*.csv,tests/generate_data.py"
+# skip_files = [
+#     "tests/data/*.*",
+#     "tests/generate_data.py",
+# ]
+
+[tool.check-manifest]
+ignore = [
+    ".editorconfig",
+    ".pre-commit-config.yaml",
+    "tox.ini",
+    "mypy.ini",
+    ".flake8",
+    "mx.ini",
+]
