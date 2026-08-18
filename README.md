@@ -32,6 +32,22 @@ the [OpenID4VC High Assurance Interoperability Profile
 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html)
 — use `dc+sd-jwt`.
 
+## Installation
+
+```shell
+pip install openid4vci
+```
+
+CBOR and COSE are only needed by the ISO mdoc profile, so they sit behind an
+extra. Install it when you issue `mso_mdoc`:
+
+```shell
+pip install "openid4vci[mdoc]"
+```
+
+JOSE is not optional and ships with the base install: key possession proofs,
+signed issuer metadata and encrypted responses are all JWS/JWE/JWK.
+
 ## Endpoints and their modules
 
 | Section | Endpoint | Module |

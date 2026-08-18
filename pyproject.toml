@@ -26,6 +26,9 @@ dependencies = [
     "pydantic-settings",
     "phonenumbers",
     "pycountry",
+    # JOSE is not optional: key possession proofs (Appendix F), signed issuer
+    # metadata and encrypted responses (Section 10) are all JWS/JWE/JWK.
+    "joserfc",
   ]
 
 [project.urls]
@@ -34,6 +37,12 @@ Issues = "https://github.com/edutap-eu/OpenID4VCI/issues"
 Documentation = "https://docs.edutap.eu/packages/openid4vci/index.html"
 
 [project.optional-dependencies]
+# CBOR and COSE are needed only by the ISO mdoc profile (mso_mdoc). A
+# deployment that issues SD-JWT VC or W3C VCDM only should not carry them.
+mdoc = [
+    "cbor2",
+    "pycose",
+]
 fastapi = [
     "fastapi>=0.95",
     "uvicorn[standard]",
