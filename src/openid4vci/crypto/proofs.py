@@ -12,12 +12,16 @@ old proof for *this* issuer from being replayed either.
 
 from ..exceptions import CredentialRequestError
 from ..models.credential import CredentialErrorCode
+from .attestation import KeyAttestation
+from .attestation import validate_key_attestation
 from .jwk import public_key_from_jwk
 from collections.abc import Callable
 from collections.abc import Collection
 from dataclasses import dataclass
 from joserfc import jwt
 from joserfc.errors import JoseError
+from joserfc.jws import JWSRegistry
+from joserfc.registry import HeaderParameter
 from typing import Any
 
 import base64
@@ -35,6 +39,40 @@ JWT_PROOF_TYP = "openid4vci-proof+jwt"
 #: JOSE header parameters that identify the key, at most one of which may appear.
 KEY_HEADERS = ("kid", "jwk", "x5c")
 
+#: JOSE header parameters this specification adds. A strict JOSE library
+#: rejects headers it does not know, and rightly so -- but `key_attestation`
+#: and `trust_chain` are defined in Appendix F.1, so they are registered here
+#: rather than by turning strict checking off for everything.
+OPENID4VCI_HEADERS = {
+    "key_attestation": HeaderParameter("Key attestation JWT", "str", False),
+    "trust_chain": HeaderParameter("OpenID Federation Trust Chain", "list[str]", False),
+}
+
+#: Largest JOSE header we accept on a key proof.
+#:
+#: joserfc defaults to 512 bytes, which is generous for a plain JOSE header and
+#: far too small here: a key proof carrying a `key_attestation` puts a whole
+#: signed JWT *inside* its header, and that alone runs past the limit. Without
+#: raising it, every attested proof would be rejected before validation began.
+#: The cap stays, because a header is still not a place for unbounded data.
+MAX_PROOF_HEADER_LENGTH = 8192
+
+
+class ProofRegistry(JWSRegistry):
+    """JWS registry for key proofs.
+
+    Accepts the two header parameters this specification adds, and the larger
+    headers an embedded key attestation brings with it.
+    """
+
+    max_header_length = MAX_PROOF_HEADER_LENGTH
+
+
+#: Registry accepting the standard JOSE headers plus the two above. Public,
+#: because anything constructing a key proof -- a Wallet, or a test -- needs
+#: the same one.
+PROOF_REGISTRY = ProofRegistry(header_registry=OPENID4VCI_HEADERS)
+
 #: MAC algorithm identifiers (RFC 7518). Appendix F.1 forbids them for key
 #: proofs, and the reason is worth stating: both sides of a MAC hold the same
 #: secret, so a verifying signature says only that someone who knows the secret
@@ -47,13 +85,15 @@ class ProofResult:
     """What a validated key proof yields.
 
     :param bound_key: public JWK the issued credential must be bound to.
-    :param header: the JOSE header, for callers that need `key_attestation`.
+    :param header: the JOSE header.
     :param claims: the JWT claims.
+    :param attestation: the validated key attestation, if the proof carried one.
     """
 
     bound_key: dict[str, Any] | None
     header: dict[str, Any]
     claims: dict[str, Any]
+    attestation: KeyAttestation | None = None
 
 
 def _invalid_proof(description: str) -> CredentialRequestError:
@@ -86,6 +126,10 @@ def validate_jwt_proof(
     supported_algorithms: Collection[str] | None = None,
     client_id: str | None = None,
     resolve_key: Callable[[dict[str, Any]], Any] | None = None,
+    attestation_resolve_key: Callable[[dict[str, Any]], Any] | None = None,
+    required_key_storage: Collection[str] | None = None,
+    required_user_authentication: Collection[str] | None = None,
+    now: int | None = None,
 ) -> ProofResult:
     """Validate one `jwt` key proof and return the key it binds to.
 
@@ -103,6 +147,14 @@ def validate_jwt_proof(
         Required for proofs identifying their key by ``kid`` or ``x5c``, since
         resolving a DID URL or a certificate chain needs trust decisions this
         library does not make.
+    :param attestation_resolve_key: the same, for the Wallet Provider key that
+        signed a ``key_attestation`` in the JOSE header. Without it, a proof
+        carrying an attestation is refused rather than silently accepted with
+        the attestation ignored.
+    :param required_key_storage: resistance levels we accept, checked against
+        the attestation.
+    :param required_user_authentication: the same, for user authentication.
+    :param now: current UNIX time, for testing.
     :raises CredentialRequestError: with ``invalid_proof`` or ``invalid_nonce``.
     """
     header = _decode_header(proof)
@@ -154,7 +206,7 @@ def validate_jwt_proof(
         key = resolve_key(header)
 
     try:
-        token = jwt.decode(proof, key, algorithms=[algorithm])
+        token = jwt.decode(proof, key, algorithms=[algorithm], registry=PROOF_REGISTRY)
     except JoseError as error:
         raise _invalid_proof(f"The key proof signature does not verify: {error}")
 
@@ -189,4 +241,92 @@ def validate_jwt_proof(
                 "fetch a fresh one from the Nonce Endpoint",
             )
 
-    return ProofResult(bound_key=bound_key, header=header, claims=claims)
+    attestation = None
+    if "key_attestation" in header:
+        if attestation_resolve_key is None:
+            raise _invalid_proof(
+                "The key proof carries a key_attestation, but no way to resolve "
+                "the Wallet Provider key was supplied; ignoring an attestation "
+                "we cannot check would accept it silently"
+            )
+        attestation = validate_key_attestation(
+            header["key_attestation"],
+            resolve_key=attestation_resolve_key,
+            c_nonce=c_nonce,
+            required_key_storage=required_key_storage,
+            required_user_authentication=required_user_authentication,
+            require_expiry=True,
+            now=now,
+        )
+        _require_key_is_attested(key, attestation)
+
+    return ProofResult(
+        bound_key=bound_key,
+        header=header,
+        claims=claims,
+        attestation=attestation,
+    )
+
+
+def _require_key_is_attested(key: Any, attestation: KeyAttestation) -> None:
+    """Check that the proof was signed by a key the attestation covers.
+
+    Appendix F.1 makes this a MUST, and it is what ties the two together: an
+    attestation about keys nobody used would let a Wallet borrow someone
+    else's hardware guarantees for a key kept in software.
+
+    Comparison is by RFC 7638 thumbprint rather than by dict equality, because
+    the same key may arrive with different member order or extra parameters.
+    """
+    try:
+        thumbprint = key.thumbprint()
+    except Exception as error:  # pragma: no cover - defensive
+        raise _invalid_proof(f"The proof key cannot be fingerprinted: {error}")
+
+    attested = set()
+    for attested_key in attestation.attested_keys:
+        try:
+            attested.add(public_key_from_jwk(attested_key).thumbprint())
+        except ValueError:
+            continue
+
+    if thumbprint not in attested:
+        raise _invalid_proof(
+            "The key proof is signed by a key the attestation does not attest"
+        )
+
+
+def validate_attestation_proof(
+    proofs: list[Any],
+    *,
+    resolve_key: Callable[[dict[str, Any]], Any],
+    c_nonce: str | None = None,
+    required_key_storage: Collection[str] | None = None,
+    required_user_authentication: Collection[str] | None = None,
+    now: int | None = None,
+) -> KeyAttestation:
+    """Validate an ``attestation`` proof (Appendix F.3).
+
+    This proof type carries a key attestation *without* a proof of possession:
+    the Wallet asserts which keys it holds and how they are protected, but
+    performs no signature with them. That is the point of it -- the keys need
+    not be exercised, so the End-User is not asked to authenticate once per key.
+
+    :param proofs: the array behind the ``attestation`` key. Appendix F requires
+        exactly one JWT in it.
+    :raises CredentialRequestError: if the array is not exactly one attestation,
+        or the attestation does not validate.
+    """
+    if len(proofs) != 1:
+        raise _invalid_proof(
+            "The attestation proof type takes an array of exactly one JWT, got "
+            f"{len(proofs)}"
+        )
+    return validate_key_attestation(
+        proofs[0],
+        resolve_key=resolve_key,
+        c_nonce=c_nonce,
+        required_key_storage=required_key_storage,
+        required_user_authentication=required_user_authentication,
+        now=now,
+    )
