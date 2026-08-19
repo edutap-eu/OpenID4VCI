@@ -55,3 +55,7 @@ var/
 /card-*.txt
 /card-*.svg
 /card-*.png
+
+# uv lockfile — this is a library, consumers resolve their own versions from
+# the ranges in pyproject.toml rather than from ours.
+uv.lock
