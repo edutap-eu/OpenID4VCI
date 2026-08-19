@@ -10,8 +10,12 @@ reformat:  ## autoformat the code
 	uvx ruff format src tests
 	uvx ruff check --fix src tests
 
+# Runs inside the project environment, not next to it: uvx would run ty in an
+# environment of its own, where none of our dependencies exist and every import
+# is unresolved. That passed locally only because a .venv happened to be lying
+# around, and failed the moment CI ran it on a clean checkout.
 typecheck:  ## run the type checker
-	uvx ty check
+	uv run --extra typecheck --extra test --extra mdoc ty check
 
 test-local:  ## run the unit tests
 	uv run --extra test pytest
