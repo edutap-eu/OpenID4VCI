@@ -63,8 +63,18 @@ signed issuer metadata and encrypted responses are all JWS/JWE/JWK.
 
 ## Status
 
-Skeleton. The module layout and the specification mapping above are settled;
-no behaviour is implemented yet.
+The model layer is implemented and tested against the specification: every
+request, response and metadata document of Sections 4 to 12, with the rules
+the specification states in prose enforced by validators rather than left to
+the caller.
+
+Not implemented yet: the cryptographic operations (`crypto/`), the credential
+format adapters (`adapters/`), and the FastAPI application (`server_fastapi/`).
+
+Built against the specification source at tag `1.0-final` of
+[openid/OpenID4VCI](https://github.com/openid/OpenID4VCI). 1.0 is the Final
+Specification and is not subject to further revision; 1.1 exists only as a
+working group draft.
 
 ## Relationship to the platform packages
 
