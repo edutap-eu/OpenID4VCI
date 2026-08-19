@@ -20,6 +20,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 
+#: Grant type identifiers used across the protocol (Sections 4.1.1 and 6.1).
+GRANT_TYPE_AUTHORIZATION_CODE = "authorization_code"
+GRANT_TYPE_PRE_AUTHORIZED_CODE = "urn:ietf:params:oauth:grant-type:pre-authorized_code"
+
+
 class Model(BaseModel):
     """Base for every model of the protocol."""
 

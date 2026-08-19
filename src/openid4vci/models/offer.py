@@ -12,6 +12,8 @@ reference, because the object rarely fits.
 """
 
 from .common import CredentialIssuerIdentifier
+from .common import GRANT_TYPE_AUTHORIZATION_CODE
+from .common import GRANT_TYPE_PRE_AUTHORIZED_CODE
 from .common import Model
 from pydantic import Field
 from typing import Literal
@@ -19,10 +21,6 @@ from urllib.parse import urlencode
 
 import json
 
-
-#: Grant type identifiers usable in a Credential Offer (Section 4.1.1).
-GRANT_TYPE_AUTHORIZATION_CODE = "authorization_code"
-GRANT_TYPE_PRE_AUTHORIZED_CODE = "urn:ietf:params:oauth:grant-type:pre-authorized_code"
 
 #: URI scheme a Wallet deployed as a native app registers for Credential Offers.
 OFFER_URI_SCHEME = "openid-credential-offer://"
