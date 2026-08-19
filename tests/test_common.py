@@ -46,3 +46,18 @@ def test_case_is_significant():
 def test_rejects_what_the_specification_excludes(value):
     with pytest.raises(ValidationError):
         identifier.validate_python(value)
+
+
+def test_defaults_stated_in_prose_are_not_written_out():
+    """An absent parameter and its spelled-out default are not the same bytes.
+
+    The specification defines several defaults in prose rather than on the
+    wire. Emitting them would turn a document we received into a different
+    one that happens to mean the same -- wrong for metadata a Wallet may
+    compare, and wrong for anything that carries a signature.
+    """
+    from openid4vci.models.offer import TransactionCode
+
+    assert TransactionCode().to_dict() == {}
+    assert TransactionCode(input_mode="numeric").to_dict() == {"input_mode": "numeric"}
+    assert TransactionCode.model_validate({"length": 4}).to_dict() == {"length": 4}

@@ -31,10 +31,22 @@ class Model(BaseModel):
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON representation that goes over the wire.
 
-        Uses the wire names, drops absent optional parameters rather than
-        sending them as null, and converts values that JSON has no type for.
+        Uses the wire names, converts values that JSON has no type for, and
+        sends only what was actually set.
+
+        The last part matters more than it looks. Several parameters have a
+        default the specification states in prose -- an absent ``mandatory``
+        means false, an absent ``input_mode`` means numeric. Writing those
+        defaults out would change a document we received into a different one
+        that happens to mean the same, which is the wrong thing to do to
+        metadata that a Wallet may compare or that may carry a signature.
         """
-        return self.model_dump(mode="json", by_alias=True, exclude_none=True)
+        return self.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude_none=True,
+            exclude_unset=True,
+        )
 
 
 class ErrorResponse(Model):
