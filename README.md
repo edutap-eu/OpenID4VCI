@@ -73,8 +73,11 @@ router serving the Nonce, Credential, Deferred Credential and Notification
 endpoints and the metadata document. The router owns the protocol mechanics
 and delegates every decision to an `IssuerBackend` a deployment provides.
 
-Not implemented yet: signing and response encryption (`crypto/signer.py`,
-`crypto/encryption.py`), the credential format adapters (`adapters/`), and the
+Message encryption (Section 10) and signing are implemented too. The signer is
+a protocol with a local implementation, so an HSM or a remote signing service
+can take its place.
+
+Not implemented yet: the credential format adapters (`adapters/`) and the
 `di_vp` and `attestation` proof types.
 
 Built against the specification source at tag `1.0-final` of
