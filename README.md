@@ -68,8 +68,14 @@ request, response and metadata document of Sections 4 to 12, with the rules
 the specification states in prose enforced by validators rather than left to
 the caller.
 
-Not implemented yet: the cryptographic operations (`crypto/`), the credential
-format adapters (`adapters/`), and the FastAPI application (`server_fastapi/`).
+`jwt` key proof validation (Appendix F.1) is implemented, as is the FastAPI
+router serving the Nonce, Credential, Deferred Credential and Notification
+endpoints and the metadata document. The router owns the protocol mechanics
+and delegates every decision to an `IssuerBackend` a deployment provides.
+
+Not implemented yet: signing and response encryption (`crypto/signer.py`,
+`crypto/encryption.py`), the credential format adapters (`adapters/`), and the
+`di_vp` and `attestation` proof types.
 
 Built against the specification source at tag `1.0-final` of
 [openid/OpenID4VCI](https://github.com/openid/OpenID4VCI). 1.0 is the Final

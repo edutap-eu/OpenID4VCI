@@ -8,6 +8,8 @@ problem rather than at the place that formats the response.
 """
 
 from .models.credential import CredentialErrorCode
+from .models.deferred import DeferredCredentialErrorCode
+from .models.notification import NotificationErrorCode
 
 
 class OpenID4VCIError(Exception):
@@ -23,6 +25,24 @@ class CredentialRequestError(OpenID4VCIError):
     """
 
     def __init__(self, code: CredentialErrorCode, description: str) -> None:
+        super().__init__(f"{code.value}: {description}")
+        self.code = code
+        self.description = description
+
+
+class DeferredCredentialError(OpenID4VCIError):
+    """A Deferred Credential Request cannot be honoured."""
+
+    def __init__(self, code: DeferredCredentialErrorCode, description: str) -> None:
+        super().__init__(f"{code.value}: {description}")
+        self.code = code
+        self.description = description
+
+
+class NotificationError(OpenID4VCIError):
+    """A Notification Request cannot be accepted."""
+
+    def __init__(self, code: NotificationErrorCode, description: str) -> None:
         super().__init__(f"{code.value}: {description}")
         self.code = code
         self.description = description

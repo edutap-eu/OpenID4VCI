@@ -48,6 +48,10 @@ fastapi = [
     "uvicorn[standard]",
 ]
 test = [
+    "openid4vci[fastapi]",
+    # starlette's TestClient warns when it finds httpx rather than httpx2,
+    # and httpx2 is what our own clients use anyway
+    "httpx2",
     "pytest",
     "pytest-asyncio",
     "pytest_httpx",
