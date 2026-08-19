@@ -6,7 +6,6 @@ publish for signed issuer metadata.
 
 from joserfc.jwk import ECKey
 from joserfc.jwk import import_key
-from joserfc.jwk import KeySet
 from joserfc.jwk import OKPKey
 from joserfc.jwk import RSAKey
 from typing import Any
@@ -34,6 +33,11 @@ def public_key_from_jwk(key_data: dict[str, Any]) -> ECKey | RSAKey | OKPKey:
     if not is_asymmetric(key_data):
         raise ValueError(f"Expected an asymmetric key, got kty={key_data.get('kty')!r}")
     key = import_key(key_data)
-    if isinstance(key, KeySet):
-        raise ValueError("Expected a single key, got a key set")
-    return key  # type: ignore[return-value]
+    # Checked on the imported object, not only on the dict that described it.
+    # The dict check reads a kty the caller supplied; this one reads what the
+    # library actually built, and that is the object a signature is verified
+    # against. It also removes the need for a suppression comment that was
+    # written in another type checker's syntax and therefore did nothing.
+    if not isinstance(key, (ECKey, RSAKey, OKPKey)):
+        raise ValueError(f"Expected a single asymmetric key, got {type(key).__name__}")
+    return key
