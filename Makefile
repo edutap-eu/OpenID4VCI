@@ -1,4 +1,4 @@
-.PHONY: help lint reformat test-local typecheck
+.PHONY: help lint reformat test-local typecheck docs docs-linkcheck docs-live docs-clean
 
 help:  ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -15,3 +15,15 @@ typecheck:  ## run the type checker
 
 test-local:  ## run the unit tests
 	uv run --extra test pytest
+
+docs:  ## build the documentation, warnings are errors
+	uv run --extra docs sphinx-build -W -b html docs docs/_build/html
+
+docs-linkcheck:  ## check that every link in the documentation resolves
+	uv run --extra docs sphinx-build -b linkcheck docs docs/_build/linkcheck
+
+docs-live:  ## build the documentation with autoreload
+	uv run --extra docs --with sphinx-autobuild sphinx-autobuild docs docs/_build/html
+
+docs-clean:  ## remove the built documentation
+	rm -rf docs/_build

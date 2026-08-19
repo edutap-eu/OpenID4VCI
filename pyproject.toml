@@ -47,6 +47,12 @@ fastapi = [
     "fastapi>=0.95",
     "uvicorn[standard]",
 ]
+docs = [
+    "furo",
+    "myst-parser",
+    "sphinx",
+    "sphinx-copybutton",
+]
 test = [
     "openid4vci[fastapi]",
     # starlette's TestClient warns when it finds httpx rather than httpx2,

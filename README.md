@@ -85,6 +85,14 @@ Built against the specification source at tag `1.0-final` of
 Specification and is not subject to further revision; 1.1 exists only as a
 working group draft.
 
+## Documentation
+
+Follows [Diataxis](https://diataxis.fr/), builds with Sphinx and MyST:
+
+```shell
+make docs
+```
+
 ## Relationship to the platform packages
 
 Wallet vendors accept OpenID4VCI alongside their own proprietary provisioning
