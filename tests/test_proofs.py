@@ -259,3 +259,6 @@ def test_a_kid_proof_needs_a_resolver(holder_key):
         resolve_key=lambda header: holder_key,
     )
     assert result.claims["aud"] == ISSUER
+    # The key still has to come back: an issuer validates a proof in order to
+    # learn what to bind the credential to, and a kid proof is no exception.
+    assert result.bound_key == holder_key.as_dict(private=False)

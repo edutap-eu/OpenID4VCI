@@ -85,12 +85,13 @@ class ProofResult:
     """What a validated key proof yields.
 
     :param bound_key: public JWK the issued credential must be bound to.
+        Always present: it is the reason a proof is validated at all.
     :param header: the JOSE header.
     :param claims: the JWT claims.
     :param attestation: the validated key attestation, if the proof carried one.
     """
 
-    bound_key: dict[str, Any] | None
+    bound_key: dict[str, Any]
     header: dict[str, Any]
     claims: dict[str, Any]
     attestation: KeyAttestation | None = None
@@ -190,7 +191,7 @@ def validate_jwt_proof(
             f"{KEY_HEADERS}, so that the signature can be verified against it"
         )
 
-    bound_key: dict[str, Any] | None = None
+    bound_key: dict[str, Any]
     if present[0] == "jwk":
         try:
             key = public_key_from_jwk(header["jwk"])
@@ -204,6 +205,16 @@ def validate_jwt_proof(
                 "issuer cannot resolve; supply a resolve_key callback"
             )
         key = resolve_key(header)
+        # The caller validates a proof in order to learn which key to bind the
+        # credential to, so this must be answered however the key arrived. A
+        # key we resolved well enough to verify a signature with can be written
+        # down as a JWK.
+        try:
+            bound_key = key.as_dict(private=False)
+        except (AttributeError, TypeError) as error:
+            raise _invalid_proof(
+                f"The resolved key cannot be expressed as a JWK: {error}"
+            )
 
     try:
         token = jwt.decode(proof, key, algorithms=[algorithm], registry=PROOF_REGISTRY)
