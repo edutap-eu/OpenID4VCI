@@ -10,6 +10,7 @@ problem rather than at the place that formats the response.
 from .models.credential import CredentialErrorCode
 from .models.deferred import DeferredCredentialErrorCode
 from .models.notification import NotificationErrorCode
+from enum import Enum
 
 
 class OpenID4VCIError(Exception):
@@ -46,3 +47,21 @@ class NotificationError(OpenID4VCIError):
         super().__init__(f"{code.value}: {description}")
         self.code = code
         self.description = description
+
+
+class OAuthErrorCode(str, Enum):
+    """Token endpoint error codes (RFC 6749 Section 5.2, clarified in Section 6.3).
+
+    This specification adds no codes of its own; it says what the existing ones
+    mean in the pre-authorized code flow, and the distinctions carry weight.
+    `invalid_request` says the Wallet built the request wrongly. `invalid_grant`
+    says the End-User typed the wrong digits. A Wallet can retry the second by
+    asking the person again; the first it cannot.
+    """
+
+    INVALID_REQUEST = "invalid_request"
+    INVALID_CLIENT = "invalid_client"
+    INVALID_GRANT = "invalid_grant"
+    UNAUTHORIZED_CLIENT = "unauthorized_client"
+    UNSUPPORTED_GRANT_TYPE = "unsupported_grant_type"
+    INVALID_SCOPE = "invalid_scope"
