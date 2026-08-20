@@ -1,0 +1,52 @@
+# Publishes to PyPI when a GitHub release is published.
+#
+# Trusted Publishing rather than an API token: PyPI verifies the workflow's
+# OIDC identity, so there is no long-lived secret in this repository to leak,
+# rotate or forget. It has to be configured once on PyPI for this repository
+# and this workflow filename.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # hatch-vcs reads the version from the tag, so a shallow clone
+          # without tags would build something numbered like a development
+          # snapshot and publish it under that number.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv build
+      - name: Show what will be published
+        run: ls -l dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distribution
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Required for Trusted Publishing; nothing else needs it.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distribution
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
