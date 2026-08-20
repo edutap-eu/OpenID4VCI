@@ -1,11 +1,29 @@
 # Releasing
 
-The version is not written down anywhere. `hatch-vcs` derives it from the git
-tag, so tagging *is* setting the version, and the two cannot disagree.
+Two destinations, and which one a build reaches is decided by *how* it was
+triggered rather than by a flag anyone sets:
 
-## Steps
+| Trigger | Goes to |
+| --- | --- |
+| every commit on `main` | `test.pypi.org` |
+| a published GitHub release | `pypi.org` |
 
-1. Make sure `main` is green and `CHANGES` reflect what is in the release.
+This is the arrangement the other eduTAP packages use, and the reason to keep
+it is that the path to production gets exercised continuously. A release
+workflow that only ever runs on release day is a workflow nobody has tested.
+
+## The version is not written down
+
+`hatch-vcs` derives it from the git tag, so tagging *is* setting the version
+and the two cannot drift apart.
+
+It also makes the per-commit uploads work: every commit on `main` produces a
+distinct development version, and `test.pypi.org` rejects a version it has
+already seen.
+
+## Releasing to pypi.org
+
+1. Make sure `main` is green.
 2. Tag the commit and push the tag:
 
    ```shell
@@ -13,37 +31,27 @@ tag, so tagging *is* setting the version, and the two cannot disagree.
    git push origin v1.0.0a1
    ```
 
-3. Publish a GitHub release for that tag. Publishing the release — not pushing
-   the tag — is what triggers the workflow.
+3. Publish a GitHub release for that tag.
 
-## What happens then
+Publishing the release — not pushing the tag — is what uploads to `pypi.org`.
 
-`.github/workflows/release.yaml` builds the distribution and uploads it to
-PyPI via Trusted Publishing.
+## One-time setup
 
-There is no API token in this repository. PyPI verifies the workflow's OIDC
-identity instead, which means there is no long-lived secret to leak, rotate or
-forget.
+Both indexes use Trusted Publishing, so there is no API token in this
+repository to leak, rotate or forget. Each needs configuring once, and the
+environment names must match the workflow:
 
-## One-time setup on PyPI
+| | Owner | Repository | Workflow | Environment |
+| --- | --- | --- | --- | --- |
+| pypi.org | `edutap-eu` | `OpenID4VCI` | `release.yaml` | `release-pypi` |
+| test.pypi.org | `edutap-eu` | `OpenID4VCI` | `release.yaml` | `release-test-pypi` |
 
-Trusted Publishing has to be configured once, under the project's publishing
-settings:
-
-| Field | Value |
-| --- | --- |
-| Owner | `edutap-eu` |
-| Repository | `OpenID4VCI` |
-| Workflow | `release.yaml` |
-| Environment | `pypi` |
-
-The environment name must match the `environment:` key in the workflow. Until
-this is configured, the publish step fails with a permissions error — which is
-the intended behaviour, not a bug in the workflow.
+Until a publisher is configured, that upload step fails with a permissions
+error. That is the intended behaviour rather than a fault in the workflow.
 
 ## Version numbers
 
-Semantic versioning. Pre-release segments follow PEP 440: `1.0.0a1`, `1.0.0b1`,
+Semantic versioning, with PEP 440 pre-release segments: `1.0.0a1`, `1.0.0b1`,
 `1.0.0rc1`, then `1.0.0`.
 
 While the credential format adapters are incomplete, releases stay in the
