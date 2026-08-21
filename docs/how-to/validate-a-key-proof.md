@@ -77,3 +77,58 @@ attestation = validate_attestation_proof(
     c_nonce=current_nonce,
 )
 ```
+
+## Accept proofs that carry a certificate chain
+
+A JOSE header is read before anything in the message is verified, so a strict
+library caps how much of it it will parse.
+The default cap is 512 bytes, which is generous for an ordinary header and far
+too small here: this protocol puts a whole signed JWT inside a header, and an
+attestation whose signer identifies itself by `x5c` carries that chain too.
+
+Measured sizes of realistic proofs:
+
+| | Header |
+| --- | ---: |
+| proof without an attestation | 236 |
+| attestation, one attested key | 952 |
+| attestation, twenty attested keys | 5 242 |
+| attestation with a one-certificate chain | 3 582 |
+| attestation with a three-certificate chain | 8 811 |
+| ten keys and a three-certificate chain | 10 843 |
+
+The default limit sits above all of these.
+Change it when your deployment differs in either direction:
+
+```python
+from openid4vci.crypto.registry import jose_registry
+
+result = validate_jwt_proof(
+    proof,
+    credential_issuer="https://issuer.example.edu",
+    c_nonce=current_nonce,
+    registry=jose_registry(max_header_length=1024),
+)
+```
+
+An issuer that expects no attestations has no reason to parse kilobytes, and
+tightening the limit is the cheaper half of this decision.
+
+```{important}
+The header limit is not your protection against a large request.
+It bounds one header, and a Credential Request may carry a batch of proofs.
+The ceiling that matters is the HTTP body limit in your reverse proxy or ASGI
+server, and that one is yours to set.
+```
+
+## Build a proof in a test
+
+The registry is needed to *construct* a proof, not only to read one: the size
+limit applies at encoding as well.
+
+```python
+from joserfc import jwt
+from openid4vci.crypto.registry import DEFAULT_JOSE_REGISTRY
+
+proof = jwt.encode(header, claims, key, registry=DEFAULT_JOSE_REGISTRY)
+```

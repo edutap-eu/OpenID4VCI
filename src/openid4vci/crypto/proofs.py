@@ -15,13 +15,14 @@ from ..models.credential import CredentialErrorCode
 from .attestation import KeyAttestation
 from .attestation import validate_key_attestation
 from .jwk import public_key_from_jwk
+from .registry import DEFAULT_JOSE_REGISTRY
 from collections.abc import Callable
 from collections.abc import Collection
 from dataclasses import dataclass
 from joserfc import jwt
+from joserfc.errors import ExceededSizeError
 from joserfc.errors import JoseError
 from joserfc.jws import JWSRegistry
-from joserfc.registry import HeaderParameter
 from typing import Any
 
 import base64
@@ -39,39 +40,9 @@ JWT_PROOF_TYP = "openid4vci-proof+jwt"
 #: JOSE header parameters that identify the key, at most one of which may appear.
 KEY_HEADERS = ("kid", "jwk", "x5c")
 
-#: JOSE header parameters this specification adds. A strict JOSE library
-#: rejects headers it does not know, and rightly so -- but `key_attestation`
-#: and `trust_chain` are defined in Appendix F.1, so they are registered here
-#: rather than by turning strict checking off for everything.
-OPENID4VCI_HEADERS = {
-    "key_attestation": HeaderParameter("Key attestation JWT", "str", False),
-    "trust_chain": HeaderParameter("OpenID Federation Trust Chain", "list[str]", False),
-}
-
-#: Largest JOSE header we accept on a key proof.
-#:
-#: joserfc defaults to 512 bytes, which is generous for a plain JOSE header and
-#: far too small here: a key proof carrying a `key_attestation` puts a whole
-#: signed JWT *inside* its header, and that alone runs past the limit. Without
-#: raising it, every attested proof would be rejected before validation began.
-#: The cap stays, because a header is still not a place for unbounded data.
-MAX_PROOF_HEADER_LENGTH = 8192
-
-
-class ProofRegistry(JWSRegistry):
-    """JWS registry for key proofs.
-
-    Accepts the two header parameters this specification adds, and the larger
-    headers an embedded key attestation brings with it.
-    """
-
-    max_header_length = MAX_PROOF_HEADER_LENGTH
-
-
-#: Registry accepting the standard JOSE headers plus the two above. Public,
-#: because anything constructing a key proof -- a Wallet, or a test -- needs
-#: the same one.
-PROOF_REGISTRY = ProofRegistry(header_registry=OPENID4VCI_HEADERS)
+#: The registry key proofs are parsed with. Kept as a name here because callers
+#: import it from this module; see crypto.registry for what it carries and why.
+PROOF_REGISTRY = DEFAULT_JOSE_REGISTRY
 
 #: MAC algorithm identifiers (RFC 7518). Appendix F.1 forbids them for key
 #: proofs, and the reason is worth stating: both sides of a MAC hold the same
@@ -131,6 +102,7 @@ def validate_jwt_proof(
     required_key_storage: Collection[str] | None = None,
     required_user_authentication: Collection[str] | None = None,
     now: int | None = None,
+    registry: JWSRegistry | None = None,
 ) -> ProofResult:
     """Validate one `jwt` key proof and return the key it binds to.
 
@@ -156,8 +128,11 @@ def validate_jwt_proof(
         the attestation.
     :param required_user_authentication: the same, for user authentication.
     :param now: current UNIX time, for testing.
+    :param registry: JOSE registry, if the default header size limit does not
+        suit this deployment. See :mod:`openid4vci.crypto.registry`.
     :raises CredentialRequestError: with ``invalid_proof`` or ``invalid_nonce``.
     """
+    registry = registry if registry is not None else PROOF_REGISTRY
     header = _decode_header(proof)
 
     if header.get("typ") != JWT_PROOF_TYP:
@@ -217,7 +192,17 @@ def validate_jwt_proof(
             )
 
     try:
-        token = jwt.decode(proof, key, algorithms=[algorithm], registry=PROOF_REGISTRY)
+        token = jwt.decode(proof, key, algorithms=[algorithm], registry=registry)
+    except ExceededSizeError as error:
+        # Reported apart from a signature failure on purpose: the first time
+        # this fired, it read as "the signature does not verify", and anyone
+        # debugging that looks at keys and certificates rather than at a
+        # parser limit.
+        raise _invalid_proof(
+            f"The key proof is larger than this issuer accepts: {error}. "
+            "Raise max_header_length on the registry if this is a legitimate "
+            "proof, for instance one carrying a certificate chain."
+        )
     except JoseError as error:
         raise _invalid_proof(f"The key proof signature does not verify: {error}")
 
@@ -268,6 +253,7 @@ def validate_jwt_proof(
             required_user_authentication=required_user_authentication,
             require_expiry=True,
             now=now,
+            registry=registry,
         )
         _require_key_is_attested(key, attestation)
 
