@@ -13,12 +13,15 @@ attestation against that demand; it does not decide what the demand is.
 
 from ..exceptions import CredentialRequestError
 from ..models.credential import CredentialErrorCode
+from .registry import DEFAULT_JOSE_REGISTRY
 from collections.abc import Callable
 from collections.abc import Collection
 from dataclasses import dataclass
 from enum import Enum
 from joserfc import jwt
+from joserfc.errors import ExceededSizeError
 from joserfc.errors import JoseError
+from joserfc.jws import JWSRegistry
 from typing import Any
 
 import base64
@@ -86,6 +89,7 @@ def validate_key_attestation(
     required_user_authentication: Collection[str] | None = None,
     require_expiry: bool = False,
     now: int | None = None,
+    registry: JWSRegistry | None = None,
 ) -> KeyAttestation:
     """Validate a key attestation in JWT format.
 
@@ -102,8 +106,13 @@ def validate_key_attestation(
     :param require_expiry: demand an ``exp`` claim. Appendix D makes it
         mandatory when the attestation accompanies a ``jwt`` key proof.
     :param now: current UNIX time, for testing.
+    :param registry: JOSE registry, if the default header size limit does not
+        suit this deployment. An attestation whose signer identifies itself by
+        a certificate chain carries that chain in its own header, which is what
+        makes the default limit matter here too.
     :raises CredentialRequestError: with ``invalid_proof`` or ``invalid_nonce``.
     """
+    registry = registry if registry is not None else DEFAULT_JOSE_REGISTRY
     header = _decode_header(attestation)
 
     if header.get("typ") != KEY_ATTESTATION_TYP:
@@ -120,7 +129,22 @@ def validate_key_attestation(
         )
 
     try:
-        token = jwt.decode(attestation, resolve_key(header), algorithms=[algorithm])
+        token = jwt.decode(
+            attestation,
+            resolve_key(header),
+            algorithms=[algorithm],
+            registry=registry,
+        )
+    except ExceededSizeError as error:
+        # Not a signature failure, and saying so matters: an attestation whose
+        # signer presents a three-certificate chain runs to roughly six
+        # kilobytes of header, and "the signature does not verify" sends
+        # whoever debugs it to the wrong place entirely.
+        raise _invalid_proof(
+            f"The key attestation is larger than this issuer accepts: {error}. "
+            "Raise max_header_length on the registry if this is a legitimate "
+            "attestation, for instance one carrying a certificate chain."
+        )
     except JoseError as error:
         raise _invalid_proof(f"The key attestation signature does not verify: {error}")
 
